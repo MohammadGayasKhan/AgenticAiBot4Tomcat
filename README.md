@@ -16,24 +16,20 @@ Human-friendly output
 
 # Structure(Modified accordingly)
 
-AgenticAiBot4Tomcat/
+AgenticAiBot4Tomcat/ 
+├─ prerequit tool/
+│  ├─ tool_base.py           # Tool base class (interface) 
+│  ├─ check_java.py          # CheckJava(Tool)
+│  ├─ check_disk.py          # CheckDisk(Tool)
+│  ├─ check_ram.py           # CheckRAM(Tool)
+│  └─ check_ports.py         # CheckPorts(Tool) 
 │
-├─ prerequit tool/                         # Pre-installation system readiness checks
-│  ├─ tool_base.py                         # Base Tool class interface (defines run() contract)
-│  ├─ check_java.py                        # Checks Java installation, version & JAVA_HOME
-│  ├─ check_disk.py                        # Checks available disk space
-│  ├─ check_ram.py                         # Checks total system RAM
-│  └─ check_ports.py                       # Checks Tomcat default ports (8080, 8005, 8009)
+├─ chatbot.py                # Orchestrator: run all tools, print & json output 
+│                            # Coordinates pre-check, install, and post-check logic 
 │
-├─ installation/   
-|  └─ modified accordingly
+├─ installation/             # Modified accordingly
+├─ PostValidation/           # Modified accordingly
 │
-├─ PostValidation/                          
-│  └─ modified accordingly
-│
-├─ chatbot.py                               # Central orchestrator: runs tools, chat interface
-│                                           # Coordinates pre-check, install, and post-check logic
-│
-├─ requirements.txt                         
-├─ README.md                               
-└─ .gitignore                              
+├─ requirements.txt
+├─ README.md
+└─ .gitignore
