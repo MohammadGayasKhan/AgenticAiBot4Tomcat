@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 from typing import Dict, Any
 from .tool_base import Tool
 
@@ -75,13 +76,40 @@ class UninstallTomcat(Tool):
         
         return False
     
+    def remove_catalina_home(self, tomcat_dir: str) -> None:
+        """Remove CATALINA_HOME environment variable if it points to this installation"""
+        try:
+            current_catalina = os.environ.get('CATALINA_HOME', '')
+            
+            # Normalize paths for comparison
+            if os.path.normpath(current_catalina).lower() == os.path.normpath(tomcat_dir).lower():
+                if os.name == 'nt':  # Windows
+                    # Remove user environment variable permanently
+                    subprocess.run(
+                        ['reg', 'delete', 'HKCU\\Environment', '/v', 'CATALINA_HOME', '/f'],
+                        capture_output=True,
+                        text=True
+                    )
+                    print(f"Removed CATALINA_HOME environment variable")
+                else:  # Unix-like systems
+                    print("Note: Please manually remove 'export CATALINA_HOME=...' from ~/.bashrc or ~/.zshrc")
+            else:
+                print(f"CATALINA_HOME points to different location, not removing")
+                
+        except Exception as e:
+            print(f"Warning: Could not remove CATALINA_HOME environment variable: {e}")
+    
     def uninstall_tomcat(self, tomcat_dir: str) -> None:
         """
-        Remove Tomcat installation directory
+        Remove Tomcat installation directory and environment variable
         """
         print(f"Removing Tomcat directory: {tomcat_dir}...")
         
         try:
+            # Remove environment variable first
+            self.remove_catalina_home(tomcat_dir)
+            
+            # Remove directory
             shutil.rmtree(tomcat_dir)
             print(f"Successfully removed: {tomcat_dir}")
         except Exception as e:
@@ -148,8 +176,10 @@ class UninstallTomcat(Tool):
                     Tomcat {version} uninstalled successfully!
 
                     Removed directory: {tomcat_dir}
+                    Removed environment variable: CATALINA_HOME
 
                     Tomcat has been completely removed from your system.
+                    Note: Restart your terminal for environment changes to take effect.
                     """
             
             return {

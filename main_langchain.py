@@ -4,8 +4,11 @@ from chatbot_langchain import LangChainChatBot
 from Tools.pre_requisit_check.check_disk import CheckDisk
 from Tools.pre_requisit_check.check_java import CheckJava
 from Tools.pre_requisit_check.check_ports import CheckPorts
+from Tools.pre_requisit_check.check_ram import CheckRAM
 from Tools.Installation.tomcat_install import InstallTomcat
 from Tools.Installation.tomcat_uninstall import UninstallTomcat
+from Tools.Installation.tomcat_start import StartTomcat
+from Tools.Installation.tomcat_stop import StopTomcat
 
 
 
@@ -16,12 +19,15 @@ if __name__ == "__main__":
     disk_tool = CheckDisk()
     java_tool = CheckJava()
     ports_tool = CheckPorts()
+    ram_tool = CheckRAM()
     tomcat_install_tool = InstallTomcat()
     tomcat_uninstall_tool = UninstallTomcat()
+    tomcat_start_tool = StartTomcat()
+    tomcat_stop_tool = StopTomcat()
     
     # Create LangChain-powered chatbot
     chatbot = LangChainChatBot(
-        tools=[disk_tool, java_tool, ports_tool, tomcat_install_tool, tomcat_uninstall_tool],
+        tools=[disk_tool, java_tool, ports_tool, ram_tool, tomcat_install_tool, tomcat_uninstall_tool, tomcat_start_tool, tomcat_stop_tool],
         model_name="llama3.1"
     )
     

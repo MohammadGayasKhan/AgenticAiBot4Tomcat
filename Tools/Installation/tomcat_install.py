@@ -1,8 +1,17 @@
 import os
 import zipfile
 import urllib.request
+import subprocess
+import sys
 from typing import Dict, Any
 from .tool_base import Tool
+
+# Import prerequisite check tools
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from pre_requisit_check.check_disk import CheckDisk
+from pre_requisit_check.check_java import CheckJava
+from pre_requisit_check.check_ports import CheckPorts
+from pre_requisit_check.check_ram import CheckRAM
 
 
 class InstallTomcat(Tool):
@@ -63,7 +72,7 @@ class InstallTomcat(Tool):
             raise Exception(f"Failed to extract Tomcat: {e}")
     
     def configure_tomcat(self, tomcat_dir: str) -> None:
-        """Basic Tomcat configuration"""
+        """Basic Tomcat configuration and set environment variables"""
         try:
             # Make shell scripts executable (for Linux/Mac)
             bin_dir = os.path.join(tomcat_dir, 'bin')
@@ -73,10 +82,110 @@ class InstallTomcat(Tool):
                         script_path = os.path.join(bin_dir, script)
                         os.chmod(script_path, 0o755)
             
+            # Set CATALINA_HOME environment variable
+            self.set_catalina_home(tomcat_dir)
+            
             print("Tomcat configured successfully")
             
         except Exception as e:
             print(f"Warning: Configuration step had issues: {e}")
+    
+    def set_catalina_home(self, tomcat_dir: str) -> None:
+        """Set CATALINA_HOME environment variable permanently (Windows)"""
+        try:
+            if os.name == 'nt':  # Windows
+                # Set user environment variable permanently
+                subprocess.run(
+                    ['setx', 'CATALINA_HOME', tomcat_dir],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                # Also set for current session
+                os.environ['CATALINA_HOME'] = tomcat_dir
+                print(f"Environment variable CATALINA_HOME set to: {tomcat_dir}")
+            else:  # Unix-like systems
+                # Set for current session
+                os.environ['CATALINA_HOME'] = tomcat_dir
+                print(f"CATALINA_HOME set to: {tomcat_dir}")
+                print("Note: Add 'export CATALINA_HOME={tomcat_dir}' to ~/.bashrc or ~/.zshrc for persistence")
+                
+        except Exception as e:
+            print(f"Warning: Could not set CATALINA_HOME environment variable: {e}")
+    
+    def run_prerequisite_checks(self, install_path: str) -> tuple:
+        """
+        Run all prerequisite checks before installation
+        
+        Returns:
+            (all_passed: bool, failed_checks: list, check_results: dict)
+        """
+        print("\n" + "="*60)
+        print("Running Prerequisite Checks...")
+        print("="*60 + "\n")
+        
+        failed_checks = []
+        check_results = {}
+        
+        # 1. Check Disk Space (need at least 250 MB for Tomcat)
+        print("1. Checking disk space...")
+        disk_checker = CheckDisk()
+        # Get the drive path from install_path
+        drive_path = os.path.splitdrive(install_path)[0] + "\\" if os.path.splitdrive(install_path)[0] else install_path
+        disk_result = disk_checker.run(min_free_mb=250, path=drive_path)
+        check_results['disk'] = disk_result
+        
+        # Check disk result (uses "space available" instead of "status")
+        disk_status = disk_result.get('space available', 'No')
+        print(f"   Space Available: {disk_status}")
+        print(f"   Details: {disk_result['details']}\n")
+        
+        if disk_status != "Yes":
+            failed_checks.append(f"Disk Space: {disk_result['details']}")
+        
+        # 2. Check Java Installation
+        print("2. Checking Java installation...")
+        java_checker = CheckJava()
+        java_result = java_checker.run()
+        check_results['java'] = java_result
+        print(f"   Status: {java_result['status']}")
+        print(f"   Details: {java_result['details']}\n")
+        
+        if java_result['status'] != "Success":
+            failed_checks.append(f"Java: {java_result['details']}")
+        
+        # 3. Check Required Ports (8080, 8005, 8009)
+        print("3. Checking required ports (8080, 8005, 8009)...")
+        port_checker = CheckPorts()
+        port_result = port_checker.run(ports=[8080, 8005, 8009])
+        check_results['ports'] = port_result
+        print(f"   Status: {port_result['status']}")
+        print(f"   Details: {port_result['details']}\n")
+        
+        if port_result['status'] != "Success":
+            failed_checks.append(f"Ports: {port_result['details']}")
+        
+        # 4. Check RAM (need at least 512 MB)
+        print("4. Checking RAM availability...")
+        ram_checker = CheckRAM()
+        ram_result = ram_checker.run()
+        check_results['ram'] = ram_result
+        print(f"   Status: {ram_result['status']}")
+        print(f"   Details: {ram_result['details']}\n")
+        
+        if ram_result['status'] != "Success":
+            failed_checks.append(f"RAM: {ram_result['details']}")
+        
+        print("="*60)
+        if failed_checks:
+            print("❌ Some prerequisite checks FAILED!")
+            for check in failed_checks:
+                print(f"   - {check}")
+        else:
+            print("✅ All prerequisite checks PASSED!")
+        print("="*60 + "\n")
+        
+        return len(failed_checks) == 0, failed_checks, check_results
     
     def check_existing_installation(self, install_path: str, version: str) -> tuple:
         """
@@ -133,6 +242,28 @@ class InstallTomcat(Tool):
                     "tomcat_home": existing_dir
                 }
             
+            # Run prerequisite checks
+            all_passed, failed_checks, check_results = self.run_prerequisite_checks(install_path)
+            
+            if not all_passed:
+                failure_details = "\n".join([f"   - {check}" for check in failed_checks])
+                output = f"""
+                    Prerequisite checks FAILED!
+
+                    The following checks did not pass:
+                    {failure_details}
+
+                    Please resolve these issues before installing Tomcat.
+                    """
+                
+                return {
+                    "status": "Failed",
+                    "command": f"Install Tomcat {version} - Prerequisite Checks",
+                    "output": output.strip(),
+                    "details": f"Failed prerequisite checks: {', '.join(failed_checks)}",
+                    "prerequisite_results": check_results
+                }
+            
             # Create install directory if it doesn't exist
             os.makedirs(install_path, exist_ok=True)
             
@@ -157,6 +288,7 @@ class InstallTomcat(Tool):
                     Tomcat {version} installed successfully!
 
                     Installation Directory: {tomcat_dir}
+                    Environment Variable: CATALINA_HOME={tomcat_dir}
                     Startup Script: {startup_script}
                     Shutdown Script: {shutdown_script}
 
@@ -167,6 +299,8 @@ class InstallTomcat(Tool):
                     {shutdown_script}
 
                     Access Tomcat at: http://localhost:8080
+                    
+                    Note: CATALINA_HOME has been set. Restart your terminal for the variable to take effect.
                     """
             
             return {
