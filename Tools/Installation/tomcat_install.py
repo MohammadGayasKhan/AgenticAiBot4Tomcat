@@ -20,11 +20,11 @@ class InstallTomcat(Tool):
     def __init__(self):
         super().__init__(
             name="install_tomcat",
-            description="Download and install Apache Tomcat 10.x.x. Default install path: C:\\apache-tomcat, Default version: 10.1.34. After installation, Tomcat will be at C:\\apache-tomcat\\apache-tomcat-10.1.34",
+            description="Download and install Apache Tomcat 10.x.x. Default install path: C:\\temp\\tomcat_test, Default version: 10.1.34. After installation, Tomcat will be at C:\\temp\\tomcat_test\\apache-tomcat-10.1.34",
             parameters={
                 "install_path": {
                     "type": "str",
-                    "description": "Directory path where Tomcat should be installed. Default: C:\\apache-tomcat (use this if user doesn't specify)"
+                    "description": "Directory path where Tomcat should be installed. Default: C:\\temp\\tomcat_test (use this if user doesn't specify)"
                 },
                 "version": {
                     "type": "str", 
@@ -152,11 +152,11 @@ class InstallTomcat(Tool):
         
         print("="*60)
         if failed_checks:
-            print("❌ Some prerequisite checks FAILED!")
+            print("X Some prerequisite checks FAILED!")
             for check in failed_checks:
                 print(f"   - {check}")
         else:
-            print("✅ All prerequisite checks PASSED!")
+            print("All prerequisite checks PASSED!")
         print("="*60 + "\n")
         
         return len(failed_checks) == 0, failed_checks, check_results
@@ -180,7 +180,7 @@ class InstallTomcat(Tool):
         
         return False, None
     
-    def run(self, install_path: str = "C:\\apache-tomcat", version: str = "10.1.34") -> Dict[str, Any]:
+    def run(self, install_path: str = "C:\\temp\\tomcat_test", version: str = "10.1.34") -> Dict[str, Any]:
         """
         Download and install Apache Tomcat
         

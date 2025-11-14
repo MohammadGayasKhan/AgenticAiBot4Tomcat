@@ -11,11 +11,11 @@ class StartTomcat(Tool):
     def __init__(self):
         super().__init__(
             name="start_tomcat",
-            description="Start Apache Tomcat server on port 8080. Default installation path: C:\\apache-tomcat\\apache-tomcat-10.1.34",
+            description="Start Apache Tomcat server on port 8080. Default installation path: C:\\temp\\tomcat_test\\apache-tomcat-10.1.34",
             parameters={
                 "tomcat_home": {
                     "type": "str",
-                    "description": "Path to Tomcat installation directory. Default: C:\\apache-tomcat\\apache-tomcat-10.1.34 (use this if user doesn't specify a path)"
+                    "description": "Path to Tomcat installation directory. Default: C:\\temp\\tomcat_test\\apache-tomcat-10.1.34 (use this if user doesn't specify a path)"
                 }
             }
         )
@@ -95,12 +95,12 @@ class StartTomcat(Tool):
             # Continue anyway - not critical for startup
     
     
-    def run(self, tomcat_home: str = "C:\\apache-tomcat\\apache-tomcat-10.1.34") -> Dict[str, Any]:
+    def run(self, tomcat_home: str = "C:\\temp\\tomcat_test\\apache-tomcat-10.1.34") -> Dict[str, Any]:
         """
         Start Apache Tomcat server on port 8080
         
         Args:
-            tomcat_home: Path to Tomcat installation directory (default: C:\\apache-tomcat\\apache-tomcat-10.1.34)
+            tomcat_home: Path to Tomcat installation directory (default: C:\\temp\\tomcat_test\\apache-tomcat-10.1.34)
         
         Returns:
             Dictionary with start status and details
@@ -127,7 +127,7 @@ class StartTomcat(Tool):
                     "details": "Tomcat is not installed"
                 }
             
-            print(f"✓ Tomcat found at: {tomcat_home}")
+            print(f"Tomcat found at: {tomcat_home}")
             
             # Step 2: Configure environment variables
             self.configure_environment_variables(tomcat_home)

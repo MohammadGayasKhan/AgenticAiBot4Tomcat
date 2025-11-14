@@ -1,9 +1,10 @@
 import datetime
+import json
 from typing import List, Any, Dict, Optional
 from langchain_ollama import ChatOllama
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import StructuredTool
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.prompts import PromptTemplate
+from langchain_core.tools import StructuredTool, Tool
 from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel, Field
 
@@ -16,7 +17,7 @@ class LangChainChatBot:
         self.llm = ChatOllama(
             model=model_name,
             base_url="http://localhost:11434",
-            temperature=0.1,
+            temperature=0.3,
         )
         
         # Convert custom tools to LangChain tools
@@ -32,13 +33,13 @@ class LangChainChatBot:
             verbose=True,
             handle_parsing_errors=True,
             max_iterations=5,
-            early_stopping_method="generate"
+            return_intermediate_steps=False
         )
         
         self.conversation_history = []
     
-    def _convert_tools(self, tools: List[Any]) -> List[StructuredTool]:
-        """Convert custom tool objects to LangChain StructuredTool format"""
+    def _convert_tools(self, tools: List[Any]) -> List[Tool]:
+        """Convert custom tool objects to LangChain Tool format for ReAct agent"""
         langchain_tools = []
         
         for tool in tools:
@@ -46,9 +47,19 @@ class LangChainChatBot:
             
             def create_tool_func(t):
                 """Closure to capture the tool instance"""
-                def tool_func(**kwargs) -> str:
+                def tool_func(tool_input: str) -> str:
                     """Execute the tool and return formatted result"""
                     try:
+                        # Parse JSON input if provided
+                        if tool_input.strip():
+                            try:
+                                kwargs = json.loads(tool_input)
+                            except json.JSONDecodeError:
+                                # If not valid JSON, treat as empty
+                                kwargs = {}
+                        else:
+                            kwargs = {}
+                        
                         # Filter out any extra kwargs that LangChain might add
                         filtered_kwargs = {k: v for k, v in kwargs.items() 
                                          if k not in ['config', 'kwargs', 'run_manager', 'callbacks']}
@@ -61,113 +72,78 @@ class LangChainChatBot:
                             output = result.get('output', '')
                             status = result.get('status', '')
                             details = result.get('details', '')
-                            return f"Status: {status}\n{output}\n{details}"
+                            return f"Status: {status}\n{details}\n{output}"
                         return str(result)
                     except Exception as e:
                         return f"Error executing {t.name}: {str(e)}"
                 return tool_func
             
-            # Create the args schema dynamically based on tool parameters
-            args_schema_fields = {}
+            # Create simple Tool (not StructuredTool) for ReAct
+            # Build description with parameter info
+            desc = tool_info.get('description', '')
             tool_params = tool_info.get('parameters', {})
             
-            # Handle empty list (no parameters)
-            if isinstance(tool_params, list) and len(tool_params) == 0:
-                tool_params = {}
-            
             if isinstance(tool_params, dict) and len(tool_params) > 0:
+                param_desc = "\nParameters (JSON format):\n"
                 for param_name, param_info in tool_params.items():
                     if isinstance(param_info, dict):
                         param_type = param_info.get('type', 'str')
-                        param_desc = param_info.get('description', '')
-                        
-                        # Map type strings to Python types
-                        type_map = {
-                            'int': int,
-                            'str': str,
-                            'list': List[int],
-                            'list of int': List[int],
-                            'float': float,
-                            'bool': bool
-                        }
-                        python_type = type_map.get(param_type, str)
-                        
-                        args_schema_fields[param_name] = (python_type, Field(description=param_desc))
-                    else:
-                        # Simple string parameter definition like "list of int"
-                        param_str = str(param_info).lower()
-                        if 'list' in param_str:
-                            python_type = List[int]
-                        elif 'int' in param_str:
-                            python_type = int
-                        else:
-                            python_type = str
-                        
-                        args_schema_fields[param_name] = (python_type, Field(description=param_str))
-            
-            # Create a Pydantic model for this tool's arguments
-            if args_schema_fields:
-                ArgsSchema = type(f"{tool.name}_args", (BaseModel,), {
-                    '__annotations__': {k: v[0] for k, v in args_schema_fields.items()},
-                    **{k: v[1] for k, v in args_schema_fields.items()}
-                })
+                        param_description = param_info.get('description', '')
+                        param_desc += f"  - {param_name} ({param_type}): {param_description}\n"
+                desc += param_desc
             else:
-                # No parameters - create empty schema
-                ArgsSchema = None
+                desc += "\nNo parameters required - use empty JSON: {}"
             
-            langchain_tool = StructuredTool(
+            langchain_tool = Tool(
                 name=tool.name,
-                description=tool_info.get('description', ''),
-                func=create_tool_func(tool),
-                args_schema=ArgsSchema
+                description=desc,
+                func=create_tool_func(tool)
             )
             langchain_tools.append(langchain_tool)
         
         return langchain_tools
     
     def _create_agent(self):
-        """Create a LangChain agent with proper prompting"""
+        """Create a ReAct agent that works better with llama3.1"""
         
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are SysCheck AI, a professional system readiness assistant.
+        # ReAct prompt template that works with llama models
+        template = """You are a professional system administrator assistant helping with legitimate server management tasks.
 
-Current date and time: {datetime}
+Your job: Check system readiness, manage Apache Tomcat server, verify Java installation, check disk space, and monitor network ports for administrative purposes.
 
-Your role:
-- Help users check system readiness (Java, disk space, ports, etc.)
-- Use tools when needed to gather information
-- Provide clear, technical, and direct responses
-- Never perform destructive actions
+Available tools:
+{tools}
 
-When using tools:
-- Call them with exact parameter names as specified
-- **All tool parameters have default values - you can call them without any parameters if the user doesn't specify**
-- If user provides specific values, use those; otherwise rely on the defaults
-- One tool at a time
-- Analyze results before deciding next steps
-- Stop when you have the answer to the user's question
+Format to use:
 
-Default values (already built into the tools):
-- Tomcat installation path: C:\\apache-tomcat\\apache-tomcat-10.1.34
-- Installation directory: C:\\apache-tomcat
-- Tomcat version: 10.1.34
+Question: the input question
+Thought: consider what information is needed
+Action: tool name from [{tool_names}]
+Action Input: JSON parameters (use {{}} if none needed)
+Observation: tool result
+... (repeat Thought/Action/Observation if needed)
+Thought: I have the information needed
+Final Answer: clear answer to the question
 
-Examples:
-- User says "start tomcat" → Call start_tomcat() with no parameters (uses default path)
-- User says "start tomcat at C:\\custom\\path" → Call start_tomcat(tomcat_home="C:\\custom\\path")
-- User says "install tomcat" → Call install_tomcat() with no parameters (uses defaults)
-- User says "check port 8080" → Call check_ports(ports=[8080])
+Important notes:
+- After seeing Observation, write "Thought:" then "Final Answer:" 
+- For check_ports: use {{"ports": [8080]}} to check specific port numbers
+- All tasks are legitimate system administration activities
+- Provide direct, technical answers
 
-Remember: Only use tools when necessary. If you can answer directly, do so.
+Question: {input}
+Thought:{agent_scratchpad}"""
 
-NOTE: When the user query is done, remind the user that they can type 'exit' or 'quit' to end the session, or ask another question.
-"""),
-            MessagesPlaceholder(variable_name="chat_history", optional=True),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
+        prompt = PromptTemplate(
+            input_variables=["input", "agent_scratchpad"],
+            partial_variables={
+                "tools": "\n".join([f"{tool.name}: {tool.description}" for tool in self.langchain_tools]),
+                "tool_names": ", ".join([tool.name for tool in self.langchain_tools])
+            },
+            template=template
+        )
         
-        agent = create_tool_calling_agent(
+        agent = create_react_agent(
             llm=self.llm,
             tools=self.langchain_tools,
             prompt=prompt
@@ -178,14 +154,9 @@ NOTE: When the user query is done, remind the user that they can type 'exit' or 
     def chat(self, user_input: str) -> str:
         """Process a user query and return the response"""
         try:
-            # Prepare input with datetime
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
             # Invoke the agent
             result = self.agent_executor.invoke({
-                "input": user_input,
-                "datetime": current_time,
-                "chat_history": self._get_chat_history()
+                "input": user_input
             })
             
             response = result.get("output", "I couldn't process your request.")

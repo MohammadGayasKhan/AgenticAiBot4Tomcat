@@ -11,11 +11,11 @@ class StopTomcat(Tool):
     def __init__(self):
         super().__init__(
             name="stop_tomcat",
-            description="Stop Apache Tomcat server. Default installation path: C:\\apache-tomcat\\apache-tomcat-10.1.34",
+            description="Stop Apache Tomcat server. Default installation path: C:\\temp\\tomcat_test\\apache-tomcat-10.1.34",
             parameters={
                 "tomcat_home": {
                     "type": "str",
-                    "description": "Path to Tomcat installation directory. Default: C:\\apache-tomcat\\apache-tomcat-10.1.34 (use this if user doesn't specify a path)"
+                    "description": "Path to Tomcat installation directory. Default: C:\\temp\\tomcat_test\\apache-tomcat-10.1.34 (use this if user doesn't specify a path)"
                 }
             }
         )
@@ -75,12 +75,12 @@ class StopTomcat(Tool):
             return True
     
     
-    def run(self, tomcat_home: str = "C:\\apache-tomcat\\apache-tomcat-10.1.34") -> Dict[str, Any]:
+    def run(self, tomcat_home: str = "C:\\temp\\tomcat_test\\apache-tomcat-10.1.34") -> Dict[str, Any]:
         """
         Stop Apache Tomcat server
         
         Args:
-            tomcat_home: Path to Tomcat installation directory (default: C:\\apache-tomcat\\apache-tomcat-10.1.34)
+            tomcat_home: Path to Tomcat installation directory (default: C:\\temp\\tomcat_test\\apache-tomcat-10.1.34)
         
         Returns:
             Dictionary with stop status and details
@@ -107,7 +107,7 @@ class StopTomcat(Tool):
                     "details": "Tomcat is not installed"
                 }
             
-            print(f"✓ Tomcat found at: {tomcat_home}")
+            print(f"Tomcat found at: {tomcat_home}")
             
             # Step 2: Check if Tomcat is running
             is_running = self.check_if_running(tomcat_home)
