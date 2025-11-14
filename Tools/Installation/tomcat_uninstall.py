@@ -11,15 +11,15 @@ class UninstallTomcat(Tool):
     def __init__(self):
         super().__init__(
             name="uninstall_tomcat",
-            description="Uninstall Apache Tomcat 10.x.x",
+            description="Uninstall Apache Tomcat 10.x.x. Default install path: C:\\apache-tomcat, Default version: 10.1.34. Will remove C:\\apache-tomcat\\apache-tomcat-10.1.34",
             parameters={
                 "install_path": {
                     "type": "str",
-                    "description": "Directory path where Tomcat is installed (default: C:\\apache-tomcat)"
+                    "description": "Directory path where Tomcat is installed. Default: C:\\apache-tomcat (use this if user doesn't specify)"
                 },
                 "version": {
                     "type": "str", 
-                    "description": "Tomcat version to uninstall (default: 10.1.34)"
+                    "description": "Tomcat version to uninstall. Default: 10.1.34 (use this if user doesn't specify)"
                 }
             }
         )

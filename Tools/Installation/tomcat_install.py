@@ -20,15 +20,15 @@ class InstallTomcat(Tool):
     def __init__(self):
         super().__init__(
             name="install_tomcat",
-            description="Download and install Apache Tomcat 10.x.x",
+            description="Download and install Apache Tomcat 10.x.x. Default install path: C:\\apache-tomcat, Default version: 10.1.34. After installation, Tomcat will be at C:\\apache-tomcat\\apache-tomcat-10.1.34",
             parameters={
                 "install_path": {
                     "type": "str",
-                    "description": "Directory path where Tomcat should be installed (default: C:\\apache-tomcat)"
+                    "description": "Directory path where Tomcat should be installed. Default: C:\\apache-tomcat (use this if user doesn't specify)"
                 },
                 "version": {
                     "type": "str", 
-                    "description": "Tomcat version to install (default: 10.1.34)"
+                    "description": "Tomcat version to install. Default: 10.1.34 (use this if user doesn't specify)"
                 }
             }
         )
@@ -72,7 +72,7 @@ class InstallTomcat(Tool):
             raise Exception(f"Failed to extract Tomcat: {e}")
     
     def configure_tomcat(self, tomcat_dir: str) -> None:
-        """Basic Tomcat configuration and set environment variables"""
+        """Basic Tomcat configuration - make scripts executable on Unix"""
         try:
             # Make shell scripts executable (for Linux/Mac)
             bin_dir = os.path.join(tomcat_dir, 'bin')
@@ -82,36 +82,10 @@ class InstallTomcat(Tool):
                         script_path = os.path.join(bin_dir, script)
                         os.chmod(script_path, 0o755)
             
-            # Set CATALINA_HOME environment variable
-            self.set_catalina_home(tomcat_dir)
-            
             print("Tomcat configured successfully")
             
         except Exception as e:
             print(f"Warning: Configuration step had issues: {e}")
-    
-    def set_catalina_home(self, tomcat_dir: str) -> None:
-        """Set CATALINA_HOME environment variable permanently (Windows)"""
-        try:
-            if os.name == 'nt':  # Windows
-                # Set user environment variable permanently
-                subprocess.run(
-                    ['setx', 'CATALINA_HOME', tomcat_dir],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                # Also set for current session
-                os.environ['CATALINA_HOME'] = tomcat_dir
-                print(f"Environment variable CATALINA_HOME set to: {tomcat_dir}")
-            else:  # Unix-like systems
-                # Set for current session
-                os.environ['CATALINA_HOME'] = tomcat_dir
-                print(f"CATALINA_HOME set to: {tomcat_dir}")
-                print("Note: Add 'export CATALINA_HOME={tomcat_dir}' to ~/.bashrc or ~/.zshrc for persistence")
-                
-        except Exception as e:
-            print(f"Warning: Could not set CATALINA_HOME environment variable: {e}")
     
     def run_prerequisite_checks(self, install_path: str) -> tuple:
         """
@@ -288,7 +262,6 @@ class InstallTomcat(Tool):
                     Tomcat {version} installed successfully!
 
                     Installation Directory: {tomcat_dir}
-                    Environment Variable: CATALINA_HOME={tomcat_dir}
                     Startup Script: {startup_script}
                     Shutdown Script: {shutdown_script}
 
@@ -299,8 +272,6 @@ class InstallTomcat(Tool):
                     {shutdown_script}
 
                     Access Tomcat at: http://localhost:8080
-                    
-                    Note: CATALINA_HOME has been set. Restart your terminal for the variable to take effect.
                     """
             
             return {

@@ -141,11 +141,27 @@ Your role:
 
 When using tools:
 - Call them with exact parameter names as specified
+- **All tool parameters have default values - you can call them without any parameters if the user doesn't specify**
+- If user provides specific values, use those; otherwise rely on the defaults
 - One tool at a time
 - Analyze results before deciding next steps
 - Stop when you have the answer to the user's question
 
-Remember: Only use tools when necessary. If you can answer directly, do so."""),
+Default values (already built into the tools):
+- Tomcat installation path: C:\\apache-tomcat\\apache-tomcat-10.1.34
+- Installation directory: C:\\apache-tomcat
+- Tomcat version: 10.1.34
+
+Examples:
+- User says "start tomcat" → Call start_tomcat() with no parameters (uses default path)
+- User says "start tomcat at C:\\custom\\path" → Call start_tomcat(tomcat_home="C:\\custom\\path")
+- User says "install tomcat" → Call install_tomcat() with no parameters (uses defaults)
+- User says "check port 8080" → Call check_ports(ports=[8080])
+
+Remember: Only use tools when necessary. If you can answer directly, do so.
+
+NOTE: When the user query is done, remind the user that they can type 'exit' or 'quit' to end the session, or ask another question.
+"""),
             MessagesPlaceholder(variable_name="chat_history", optional=True),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
