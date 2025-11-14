@@ -9,6 +9,8 @@ from Tools.Installation.tomcat_install import InstallTomcat
 from Tools.Installation.tomcat_uninstall import UninstallTomcat
 from Tools.Installation.tomcat_start import StartTomcat
 from Tools.Installation.tomcat_stop import StopTomcat
+from Tools.post_install.tomcat_post_install import PostInstallTomcat
+from Tools.remote_workflow_tool import RemoteWorkflowTool
 
 
 
@@ -24,10 +26,23 @@ if __name__ == "__main__":
     tomcat_uninstall_tool = UninstallTomcat()
     tomcat_start_tool = StartTomcat()
     tomcat_stop_tool = StopTomcat()
+    tomcat_post_install_tool = PostInstallTomcat()
+    remote_workflow_tool = RemoteWorkflowTool()
     
     # Create LangChain-powered chatbot
     chatbot = LangChainChatBot(
-        tools=[disk_tool, java_tool, ports_tool, ram_tool, tomcat_install_tool, tomcat_uninstall_tool, tomcat_start_tool, tomcat_stop_tool],
+        tools=[
+            disk_tool,
+            java_tool,
+            ports_tool,
+            ram_tool,
+            tomcat_install_tool,
+            tomcat_uninstall_tool,
+            tomcat_start_tool,
+            tomcat_stop_tool,
+            tomcat_post_install_tool,
+            remote_workflow_tool,
+        ],
         model_name="llama3.1"
     )
     

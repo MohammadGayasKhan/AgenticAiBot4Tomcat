@@ -1,0 +1,57 @@
+# Remote automation configuration
+# Adjust values as needed for your environments.
+
+pre_install:
+  java:
+    linux:
+      download_url: "https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.tar.gz"
+      archive_path: "~/jdk.tar.gz"
+      install_dir: "~/java"
+      version_check: "bash -lc '$HOME/java/*/bin/java -version'"
+      packages:
+        - wget
+        - tar
+      package_update_command: "sudo apt update -y"
+      package_install_command: "sudo apt install -y {packages}"
+    windows:
+      download_url: "https://aka.ms/download-jdk/microsoft-jdk-17-windows-x64.zip"
+      archive_path: "C:\\Temp\\jdk.zip"
+      install_root: "$env:USERPROFILE\\Java"
+      folder_pattern: "^(jdk|microsoft-jdk|msopenjdk)-"
+      min_download_size: 50000
+      set_environment: true
+      environment_scope: "User"
+      java_home_expression: "(Join-Path $env:USERPROFILE 'Java\\{folder}')"
+      version_command: "powershell -Command \"& (Join-Path (Join-Path $env:USERPROFILE 'Java') '{folder}')\\bin\\java.exe -version\""
+      curl_extra_args: ""
+
+install:
+  tomcat:
+    version: "10.1.34"
+    windows:
+      download_url: "https://archive.apache.org/dist/tomcat/tomcat-10/v10.1.34/bin/apache-tomcat-10.1.34.zip"
+      archive_path: "C:\\Temp\\tomcat.zip"
+      install_root: "C:\\temp\\tomcat_test"
+      folder_pattern: "^apache-tomcat-"
+      min_download_size: 100000
+      cleanup_archive: true
+    linux:
+      download_url: "https://archive.apache.org/dist/tomcat/tomcat-10/v10.1.34/bin/apache-tomcat-10.1.34.tar.gz"
+      archive_path: "~/tomcat.tar.gz"
+      install_root: "~/tomcat"
+      strip_components: 1
+      cleanup_archive: true
+
+post_install:
+  tomcat:
+    host_template: "{host}"
+    port: 8080
+    wait_seconds: 30
+    attempt_start: true
+    attempt_stop: true
+    windows:
+      start_command: "powershell -Command \"& '{tomcat_home}\\bin\\startup.bat'\""
+      stop_command: "powershell -Command \"& '{tomcat_home}\\bin\\shutdown.bat'\""
+    linux:
+      start_command: "bash -lc '{tomcat_home}/bin/startup.sh'"
+      stop_command: "bash -lc '{tomcat_home}/bin/shutdown.sh'"

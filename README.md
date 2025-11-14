@@ -14,22 +14,50 @@ Orchestrator dynamically discovers and runs tools, aggregates results.
 
 Human-friendly output
 
-# Structure(Modified accordingly)
+# Structure (high-level)
 
-AgenticAiBot4Tomcat/ 
-├─ prerequit tool/
-│  ├─ tool_base.py           # Tool base class (interface) 
-│  ├─ check_java.py          # CheckJava(Tool)
-│  ├─ check_disk.py          # CheckDisk(Tool)
-│  ├─ check_ram.py           # CheckRAM(Tool)
-│  └─ check_ports.py         # CheckPorts(Tool) 
+```
+AgenticAiBot4Tomcat/
+├─ Tools/
+│  ├─ pre_requisit_check/    # Local prerequisite checks
+│  ├─ Installation/          # Local install / start / stop tools
+│  └─ post_install/          # Local post-install validation
 │
-├─ chatbot.py                # Orchestrator: run all tools, print & json output 
-│                            # Coordinates pre-check, install, and post-check logic 
+├─ Remote/                   # Remote orchestration (YAML + INI driven)
+│  ├─ config/                # settings.yaml + servers.ini
+│  ├─ install/               # RemoteTomcatInstallTool
+│  ├─ pre_install/           # RemoteJavaInstallTool
+│  ├─ post_install/          # RemoteTomcatPostInstallTool
+│  ├─ utilities/             # Shared helpers (download/extract, config loading)
+│  └─ run_remote_workflow.py # CLI runner for multi-host execution
 │
-├─ installation/             # Modified accordingly
-├─ PostValidation/           # Modified accordingly
-│
+├─ chatbot.py                # CLI chatbot orchestrator (local tools)
+├─ main.py / main_langchain.py
 ├─ requirements.txt
-├─ README.md
-└─ .gitignore
+└─ README.md
+```
+
+# Remote automation
+
+The `Remote/` package lets you execute the full Java → Tomcat install → post-install
+validation pipeline across one or more hosts via SSH. Everything is data-driven:
+
+- `Remote/config/settings.yaml` defines install metadata (URLs, paths, commands).
+- `Remote/config/servers.ini` defines the target hosts, credentials, or key paths.
+- `Remote/run_remote_workflow.py` ties it together and runs the workflow per host.
+
+Example usage (run from repository root):
+
+```powershell
+python -m Remote.run_remote_workflow --settings Remote/config/settings.yaml --servers Remote/config/servers.ini
+```
+
+> Tip: adjust the YAML to match your desired Tomcat/Java versions, directories,
+> and start/stop commands. Set usernames/passwords or SSH keys in the INI file.
+
+Every tool returns structured dictionaries (`status`, `details`, `output`, etc.) so
+you can log results or feed them into higher-level automation.
+
+The same workflow is exposed through the chatbot as the `remote_workflow` tool. Ask
+SysCheck AI to run it (optionally overriding `settings_path`, `servers_path`, or
+`target_servers`) to execute remote provisioning conversationally.
