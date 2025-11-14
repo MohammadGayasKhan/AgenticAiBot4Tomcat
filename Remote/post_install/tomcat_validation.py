@@ -1,24 +1,43 @@
+"""Validate Tomcat availability over HTTP."""
+
+from __future__ import annotations
+
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
-from Remote.tool_base import RemoteTool
 from Remote.remote_executor import RemoteExecutor
+from Remote.tool_base import RemoteTool
 
 
-class RemoteTomcatPostInstallTool(RemoteTool):
-    """Start Tomcat remotely, verify HTTP availability, and optionally shut it down."""
+class RemoteTomcatValidationTool(RemoteTool):
+    """Verify that a remote Tomcat instance responds over HTTP."""
+
+    config_path = ("post_install", "tomcat_validation")
 
     def __init__(self) -> None:
         super().__init__(
-            name="remote_tomcat_post_install",
-            description="Validate remote Tomcat by starting, probing HTTP, and optionally stopping",
-            parameters={
-                "executor": "Connected RemoteExecutor instance",
-                "config": "Dictionary extracted from YAML under post_install.tomcat",
-                "server": "Server metadata dictionary (from INI)",
-                "tomcat_home": "Resolved Tomcat home directory on target",
+            name="remote_tomcat_validation",
+            description="Validate remote Tomcat by polling its HTTP endpoint",
+            parameters={},
+            user_parameters={
+                "tomcat_home": {
+                    "type": "str",
+                    "description": "Tomcat home directory (optional, used for metadata only)",
+                },
+                "port": {
+                    "type": "int",
+                    "description": "Override HTTP port checked for readiness",
+                },
+                "host_template": {
+                    "type": "str",
+                    "description": "Override the HTTP host template (defaults to {host})",
+                },
+                "wait_seconds": {
+                    "type": "int",
+                    "description": "Override wait time for HTTP readiness",
+                },
             },
         )
 
@@ -27,36 +46,16 @@ class RemoteTomcatPostInstallTool(RemoteTool):
         executor: RemoteExecutor,
         config: Dict[str, Any],
         server: Dict[str, Any],
-        tomcat_home: str,
+        tomcat_home: str | None = None,
     ) -> Dict[str, Any]:
-        logs = []
+        del executor  # Validation uses only network checks against HTTP endpoint
+        logs: List[str] = []
         try:
-            logs.append("Detecting remote operating system...")
-            os_type = executor.detect_os()
-            logs.append(f"✔ Detected OS: {os_type}")
-
-            os_cfg = config.get(os_type, {})
-            start_cmd_template = os_cfg.get("start_command")
-            stop_cmd_template = os_cfg.get("stop_command")
-            if config.get("attempt_start", True) and not start_cmd_template:
-                return self._failure("start_command not configured", logs)
-            if config.get("attempt_stop", True) and not stop_cmd_template:
-                return self._failure("stop_command not configured", logs)
-
-            start_result = None
-            stop_result = None
-
-            if config.get("attempt_start", True):
-                start_command = start_cmd_template.format(tomcat_home=tomcat_home)
-                logs.append(f"Starting Tomcat using: {start_command}")
-                stdout, stderr = executor.run(start_command)
-                start_result = {"stdout": stdout, "stderr": stderr}
-                logs.append("Start command dispatched")
-
             wait_seconds = int(config.get("wait_seconds", 30))
             host_template = config.get("host_template", "{host}")
-            http_host = host_template.format(**server)
             port = int(config.get("port", 8080))
+
+            http_host = host_template.format(**server)
             url = f"http://{http_host}:{port}"
 
             logs.append(f"Waiting up to {wait_seconds}s for HTTP {url}")
@@ -79,14 +78,6 @@ class RemoteTomcatPostInstallTool(RemoteTool):
                 logs.append("Timed out waiting for HTTP response")
 
             running = status_code is not None and 200 <= status_code < 500
-
-            if config.get("attempt_stop", True):
-                stop_command = stop_cmd_template.format(tomcat_home=tomcat_home)
-                logs.append(f"Stopping Tomcat using: {stop_command}")
-                stdout, stderr = executor.run(stop_command)
-                stop_result = {"stdout": stdout, "stderr": stderr}
-                logs.append("Stop command dispatched")
-
             result_status = "Success" if running else "Failed"
             details = (
                 f"Tomcat responded at {url} with HTTP {status_code}"
@@ -100,22 +91,22 @@ class RemoteTomcatPostInstallTool(RemoteTool):
                 "command": f"Validate Tomcat at {url}",
                 "output": "\n".join(filter(None, logs)),
                 "details": details,
-                "start_result": start_result,
-                "stop_result": stop_result,
                 "url": url,
                 "status_code": status_code,
             }
+            if tomcat_home:
+                payload["tomcat_home"] = tomcat_home
             return payload
 
         except Exception as exc:  # pragma: no cover - defensive
             logs.append(f"Exception: {exc}")
             return self._failure(str(exc), logs)
 
-    def _failure(self, message: str, logs) -> Dict[str, Any]:
+    def _failure(self, message: str, logs: List[str]) -> Dict[str, Any]:
         return {
             "name": self.name,
             "status": "Failed",
-            "command": "remote_tomcat_post_install",
+            "command": "remote_tomcat_validation",
             "output": "\n".join(filter(None, logs)),
             "details": message,
         }

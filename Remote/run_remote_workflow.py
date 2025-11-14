@@ -5,7 +5,11 @@ from Remote.remote_executor import RemoteExecutor
 from Remote.utilities.config_loader import load_server_ini, load_yaml
 from Remote.pre_install.remote_java_install import RemoteJavaInstallTool
 from Remote.install.remote_tomcat_install import RemoteTomcatInstallTool
-from Remote.post_install.remote_tomcat_post_install import RemoteTomcatPostInstallTool
+from Remote.post_install import (
+    RemoteTomcatStartTool,
+    RemoteTomcatStopTool,
+    RemoteTomcatValidationTool,
+)
 
 
 class RemoteWorkflowRunner:
@@ -13,7 +17,9 @@ class RemoteWorkflowRunner:
         self.settings = settings
         self.java_tool = RemoteJavaInstallTool()
         self.tomcat_install_tool = RemoteTomcatInstallTool()
-        self.tomcat_post_tool = RemoteTomcatPostInstallTool()
+        self.tomcat_start_tool = RemoteTomcatStartTool()
+        self.tomcat_validation_tool = RemoteTomcatValidationTool()
+        self.tomcat_stop_tool = RemoteTomcatStopTool()
 
     def run_for_server(self, server: Dict[str, Any]) -> Dict[str, Any]:
         results: Dict[str, Any] = {"server": server.get("name", server.get("host"))}
@@ -54,22 +60,50 @@ class RemoteWorkflowRunner:
                 tomcat_home = install_result.get("tomcat_home")
 
             # Post-install
-            post_cfg = self.settings.get("post_install", {}).get("tomcat")
-            if post_cfg:
-                effective_home = tomcat_home or post_cfg.get("tomcat_home")
+            post_cfg = self.settings.get("post_install", {})
+            start_cfg = post_cfg.get("tomcat_start")
+            validation_cfg = post_cfg.get("tomcat_validation")
+            stop_cfg = post_cfg.get("tomcat_stop")
+
+            default_home = post_cfg.get("default_tomcat_home") if isinstance(post_cfg, dict) else None
+            effective_home = (
+                tomcat_home
+                or default_home
+                or (start_cfg or {}).get("tomcat_home")
+                or (validation_cfg or {}).get("tomcat_home")
+                or (stop_cfg or {}).get("tomcat_home")
+            )
+
+            if start_cfg:
+                start_result = self.tomcat_start_tool.run(
+                    executor=executor,
+                    config=start_cfg,
+                    tomcat_home=effective_home,
+                )
+                results["post_install_tomcat_start"] = start_result
+
+            if validation_cfg:
                 if effective_home:
-                    post_result = self.tomcat_post_tool.run(
-                        executor,
-                        post_cfg,
-                        server,
-                        effective_home,
+                    validation_result = self.tomcat_validation_tool.run(
+                        executor=executor,
+                        config=validation_cfg,
+                        server=server,
+                        tomcat_home=effective_home,
                     )
-                    results["post_install_tomcat"] = post_result
+                    results["post_install_tomcat_validation"] = validation_result
                 else:
-                    results["post_install_tomcat"] = {
+                    results["post_install_tomcat_validation"] = {
                         "status": "Skipped",
-                        "details": "Tomcat home not available for post-install validation",
+                        "details": "Tomcat home not available for validation",
                     }
+
+            if stop_cfg:
+                stop_result = self.tomcat_stop_tool.run(
+                    executor=executor,
+                    config=stop_cfg,
+                    tomcat_home=effective_home,
+                )
+                results["post_install_tomcat_stop"] = stop_result
 
             return results
 

@@ -2,6 +2,23 @@
 # Adjust values as needed for your environments.
 
 pre_install:
+  disk_check:
+    linux:
+      path: "/"
+      min_free_mb: 2048
+    windows:
+      path: "C:\\"
+      min_free_mb: 4096
+  port_check:
+    linux:
+      ports: [8080, 8005, 8009]
+    windows:
+      ports: [8080, 8005, 8009]
+  ram_check:
+    linux:
+      min_mb: 2048
+    windows:
+      min_mb: 2048
   java:
     linux:
       download_url: "https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.tar.gz"
@@ -41,17 +58,27 @@ install:
       install_root: "~/tomcat"
       strip_components: 1
       cleanup_archive: true
+  tomcat_uninstall:
+    cleanup_logs: true
+    windows:
+      tomcat_home: "C:\\temp\\tomcat_test\\apache-tomcat-10.1.34"
+      logs_dir: "C:\\temp\\tomcat_test\\logs"
+    linux:
+      logs_dir: "~/tomcat/logs"
 
 post_install:
-  tomcat:
+  default_tomcat_home: "C:\\temp\\tomcat_test\\apache-tomcat-10.1.34"
+  tomcat_start:
+    windows:
+      start_command: "cmd.exe /c \"cd /d {tomcat_home}\\bin && startup.bat\""
+    linux:
+      start_command: "bash -lc '{tomcat_home}/bin/startup.sh'"
+  tomcat_validation:
     host_template: "{host}"
     port: 8080
     wait_seconds: 30
-    attempt_start: true
-    attempt_stop: true
+  tomcat_stop:
     windows:
-      start_command: "powershell -Command \"& '{tomcat_home}\\bin\\startup.bat'\""
-      stop_command: "powershell -Command \"& '{tomcat_home}\\bin\\shutdown.bat'\""
+      stop_command: "cmd.exe /c \"cd /d {tomcat_home}\\bin && shutdown.bat\""
     linux:
-      start_command: "bash -lc '{tomcat_home}/bin/startup.sh'"
       stop_command: "bash -lc '{tomcat_home}/bin/shutdown.sh'"

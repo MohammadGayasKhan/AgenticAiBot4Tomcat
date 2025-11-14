@@ -15,14 +15,14 @@ except ImportError:  # pragma: no cover
 class RemoteTomcatInstallTool(RemoteTool):
     """Install Apache Tomcat on a remote host using configuration-driven settings."""
 
+    config_path = ("install", "tomcat")
+
     def __init__(self) -> None:
         super().__init__(
             name="remote_tomcat_install",
             description="Download and install Apache Tomcat remotely (Windows/Linux)",
-            parameters={
-                "executor": "Connected RemoteExecutor instance",
-                "config": "Dictionary extracted from YAML under install.tomcat",
-            },
+            parameters={},
+            user_parameters={},
         )
         self._download_tool = RemoteCurlDownloadTool()
         self._extract_tool = RemoteZipExtractTool()

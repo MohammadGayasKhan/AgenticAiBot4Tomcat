@@ -15,14 +15,14 @@ except ImportError:  # Fallback for script executions where pre_install is top-l
 
 class RemoteJavaInstallTool(RemoteTool):
 
+    config_path = ("pre_install", "java")
+
     def __init__(self) -> None:
         super().__init__(
             name="remote_java_install",
             description="Install Java on remote Windows/Linux hosts using configuration-driven settings",
-            parameters={
-                "executor": "Connected RemoteExecutor instance",
-                "config": "Dictionary extracted from YAML under pre_install.java"
-            }
+            parameters={},
+            user_parameters={},
         )
         self._download_tool = RemoteCurlDownloadTool()
         self._extract_tool = RemoteZipExtractTool()
@@ -92,14 +92,13 @@ class RemoteJavaInstallTool(RemoteTool):
                 if not all([jdk_url, archive_path, install_root]):
                     return self._missing_config("windows.(download_url/archive_path/install_root)", logs)
 
-                # logs.append("Checking existing Java...")
-                # out, err = exe.run('powershell -Command "java -version"')
-                # if "version" in (out + err).lower():
-                #     logs.append("✔ Java already installed.")
-                #     exe.close()
-                #     return {"name": self.name, "status": "Success", "command": "java -version", "output": out + err, "details": "\n".join(logs)}
+                logs.append("Checking existing Java...")
+                out, err = executor.run('powershell -Command "java -version"')
+                if "version" in (out + err).lower():
+                    logs.append("✔ Java already installed.")
+                    return {"name": self.name, "status": "Success", "command": "java -version", "output": out + err, "details": "\n".join(logs)}
 
-                # logs.append("Java not found → Installing Java...")
+                logs.append("Java not found → Installing Java...")
 
                 # Create folders
                 logs.append("Ensuring folders exist...")
