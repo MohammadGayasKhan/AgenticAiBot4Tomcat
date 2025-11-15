@@ -31,16 +31,13 @@ AgenticAiBot4Tomcat/
 │  ├─ utilities/             # Shared helpers (download/extract, config loading)
 │  └─ run_remote_workflow.py # Legacy CLI runner for multi-host execution
 │
-├─ RemoteAgent/              # Standalone remote chatbot project (dynamic tools)
-│  ├─ chatbot.py             # CLI chatbot wrapper with auto-discovered tools
-│  ├─ langchain_chatbot.py   # LangChain variant of the remote chatbot
-│  ├─ tool_loader.py         # Discovers Remote.* tool classes automatically
-│  ├─ dynamic_adapter.py     # Connects tools with config + remote execution
-│  ├─ main.py                # CLI entry point (non-LangChain)
-│  └─ main_langchain.py      # CLI entry point (LangChain / ReAct agent)
+├─ RemoteAgent/              # Standalone remote chatbot project (LangChain)
+│  ├─ chatbot.py             # RemoteWorkflowChatBot (LangChain + workflow orchestration)
+│  ├─ inventory_tool.py      # Optional helper to list configured servers
+│  ├─ main.py                # Compatibility shim (redirects users to LangChain entry point)
+│  └─ main_langchain.py      # CLI entry point for the LangChain workflow bot
 │
-├─ chatbot.py                # CLI chatbot orchestrator (local tools)
-├─ main.py / main_langchain.py
+├─ main_langchain.py         # Convenience wrapper around RemoteAgent.main_langchain
 ├─ requirements.txt
 └─ README.md
 ```
@@ -68,29 +65,79 @@ you can log results or feed them into higher-level automation.
 
 # Remote chatbot project
 
-All remote automation tooling is now accessible via a dedicated chatbot project in
-`RemoteAgent/`. Tools are discovered dynamically: dropping a new module under the
-`Remote` package (e.g., `Remote/custom/remote_db_backup.py`) that defines a
-`RemoteTool` subclass makes it immediately available to the chatbot without adding
-any registration code.
+Remote automation now flows through a single LangChain-powered bot: `RemoteWorkflowChatBot`
+(`RemoteAgent/chatbot.py`). The bot keeps conversation context, remembers prior
+selections, and delegates the heavy lifting to the `remote_workflow` tool so every
+server runs the full Java → Tomcat workflow sequentially.
 
-Run the remote chatbot via the LangChain ReAct agent:
+Run the chatbot with optional overrides for config paths or the Ollama model name:
 
 ```powershell
-python -m RemoteAgent.main_langchain
+python -m RemoteAgent.main_langchain --settings Remote/config/settings.yaml --servers Remote/config/servers.ini
 ```
 
-The agent automatically loads `settings.yaml` / `servers.ini` by default and exposes
-the same parameter schema the tools advertise. Override paths or inject ad-hoc hosts
-at runtime by passing JSON arguments when the bot calls tools (e.g., set
-`host`/`username` directly in the tool invocation prompt).
+Key behaviour:
+- **Session memory:** The bot replays the latest history (last ~12 turns) to keep answers consistent.
+- **Smart server selection:** If only one server is configured it runs immediately. When multiple servers exist it asks whether to act on a specific host or "all". Once you pick, that choice is remembered until you change it.
+- **Workflow per server:** Every selected host runs the entire provisioning and validation workflow independently, and the bot summarizes the combined results.
+- **No premature stops:** The chat loop only aborts if the user gives conflicting/invalid server choices several times in a row; otherwise it finishes the job regardless of intermediate step counts.
 
-Use the `list_servers` tool to inspect the configured inventory without providing a
-specific host.
+The underlying `Tools/remote_workflow_tool.py` is still available for scripted usage or tests, so you can automate the same flow without the conversational layer when needed.
 
-The legacy `remote_workflow` tool remains available for scripted multi-host runs,
-but the chatbot can now process bespoke sequences by chaining individual tools at
-runtime — no pre-defined workflow is required.
+## Remote agent quickstart checklist
+
+1. **Install dependencies** (inside a virtual environment if desired):
+	```powershell
+	pip install -r requirements.txt
+	```
+2. **Configure settings** in `Remote/config/settings.yaml` (download URLs, install paths, Tomcat start/stop commands). Make sure `post_install.default_tomcat_home` matches the real deploy directory.
+3. **Define servers** in `Remote/config/servers.ini` with `host`, `username`, and either `password` or `key_path`. Optionally add per-server overrides such as `tomcat_home`.
+4. **Launch the chatbot** and talk to it:
+	```powershell
+	python -m RemoteAgent.main_langchain --settings Remote/config/settings.yaml --servers Remote/config/servers.ini
+	```
+	Example prompts:
+	- `check disk space on server.example1`
+	- `run all prerequisites on both servers`
+	- `install tomcat on server.example2`
+	- `stop tomcat` / `uninstall tomcat` / `validate tomcat`
+
+	The bot decides which remote tools to call, streams a concise summary, and writes detailed traces to `logs/remote_chatbot.log`.
+5. **Review logs** if something fails. Every tool emits structured JSON so you can trace SSH commands, stdout/stderr, and follow-up suggestions.
+
+> Tip: When running against real infrastructure, keep your Ollama / LangChain model on the same machine where these tools run so the agent can launch SSH sessions locally.
+
+## Enabling OpenSSH on Windows targets
+
+Remote execution requires an SSH service on each Windows host. Run these commands **as Administrator on the target machine**:
+
+1. Download OpenSSH from the official release page and extract it:
+	- Download: [OpenSSH-Win64.zip](https://github.com/PowerShell/Win32-OpenSSH/releases)
+	- Extract to: `C:\Program Files\OpenSSH`
+
+2. Install and register the SSH service:
+	```powershell
+	cd "C:\Program Files\OpenSSH"
+	powershell.exe -ExecutionPolicy Bypass -File install-sshd.ps1
+	```
+
+3. Allow inbound SSH through Windows Firewall:
+	```powershell
+	New-NetFirewallRule -Name sshd -DisplayName "OpenSSH Server" -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+	```
+
+4. Start the service and set it to launch automatically:
+	```powershell
+	Start-Service sshd
+	Set-Service sshd -StartupType Automatic
+	```
+
+5. (Optional) Validate from another machine:
+	```powershell
+	ssh username@192.168.x.x
+	```
+
+Replace `username` and the IP with the actual account configured in `servers.ini`. Once SSH succeeds from your automation host, the remote chatbot can run all prerequisite checks and Tomcat workflows without additional setup.
 
 # Manual remote test scripts
 
